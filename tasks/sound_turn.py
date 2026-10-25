@@ -1,6 +1,6 @@
 import time
 
-TURN_LEFT, TURN_RIGHT, DEGREES = 2, 3, 2  # E_Model.Direction / E_Model.Unit values
+TURN_LEFT, TURN_RIGHT = 2, 3  # E_Model.Direction values
 
 
 def turn_for(angle):
@@ -21,7 +21,8 @@ def report(got):
 
 def run(got, chassis="mecanum", speed=90, min_angle=15, cooldown=1.0):
     """Turn to face any voice or clap, then report battery and tilt, forever. Ctrl+C to stop."""
-    turn = getattr(got, f"{chassis}_turn_speed_times")
+    # Same call <chassis>_turn_speed_times makes, but that wrapper drops the robot's reply, hiding rejections.
+    move = getattr(got.MODEL, f"{chassis}_move_control")
     got.enable_audio_direction()
     print("Listening - clap or talk...")
     try:
@@ -32,7 +33,9 @@ def run(got, chassis="mecanum", speed=90, min_angle=15, cooldown=1.0):
                 direction, degrees = turn_for(res.angle)
                 print(f"Sound at {res.angle} deg -> turn {'left' if direction == TURN_LEFT else 'right'} {degrees}")
                 if degrees >= min_angle:
-                    turn(direction, speed, degrees, DEGREES)
+                    r = move(rotate_speed=speed if direction == TURN_LEFT else -speed, target_angle=degrees)
+                    if r.code != 0:
+                        print(f"Robot refused turn: code {r.code}, {r.msg}")
                     time.sleep(degrees / speed)  # let the turn finish
                 report(got)
                 time.sleep(cooldown)  # so motor/TTS noise isn't heard as a new sound
