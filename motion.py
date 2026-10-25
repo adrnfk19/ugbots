@@ -4,6 +4,8 @@ LEFT_MOTORS = [11, 31]
 RIGHT_MOTORS = [41, 61]
 LEFT_SIGN = -1
 RIGHT_SIGN = 1
+# shortcut: unmeasured guess; time turn_left(got, 2) at speed 40 and set this to degrees turned / 2.
+DEG_PER_SEC = 90  # at speed 40
 
 def drive(got, left_speed, right_speed):
     for m in LEFT_MOTORS:
