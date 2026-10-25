@@ -1,15 +1,25 @@
-import sys
+import argparse
 from ugot import ugot
+from tasks import line_follow, sound_turn
 
-# Usage: python main.py [ROBOT_IP]  (no IP -> scan the LAN and pick the first robot)
+
+def hello(got, args):
+    got.play_audio_tts("Team Jellyfish", 0, True)
+
+
+# Add new tasks here: name -> function(got, args)
+TASKS = {
+    "hello": hello,
+    "sound-turn": lambda got, a: sound_turn.run(got, a.speed),
+    "line-follow": lambda got, a: line_follow.run(got, a.speed),
+}
+
+p = argparse.ArgumentParser(description="Run a UGOT task")
+p.add_argument("task", choices=TASKS)
+p.add_argument("--ip", required=True, help="robot IP, from its controller: Settings -> About")
+p.add_argument("--speed", type=int, default=40, help="motor speed, 1-140")
+args = p.parse_args()
+
 got = ugot.UGOT()
-ip = sys.argv[1] if len(sys.argv) > 1 else None
-if ip is None:
-    devices = got.scan_device()
-    print("Found:", devices)
-    if not devices:
-        sys.exit("No UGOT found - same Wi-Fi as the robot?")
-    ip = next(iter(devices.values()))
-
-got.initialize(ip)
-got.play_audio_tts("Team Jellyfish", 0, True)
+got.initialize(args.ip)
+TASKS[args.task](got, args)

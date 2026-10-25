@@ -5,7 +5,44 @@ import time
 import cv2
 import numpy as np
 from ugot import ugot
+import sys
 
+# Stops the robot STOP_CM before a wall. Doesn't drive - movement is someone else's code.
+# Check wall_ahead() every loop of your driving code (see drive_example.py):
+#   import wall_stop
+#   sensor_id = wall_stop.find_tof(got)
+#   while True:
+#       if wall_stop.wall_ahead(got, sensor_id):
+#           wall_stop.stop_robot(got)
+#           break
+#       ... your driving code ...
+STOP_CM = 25
+PRESET_MODELS = ('mecanum', 'balance', 'transform', 'wheel_legged', 'spider', 'dog', 'engineer')
+
+
+def find_tof(got):
+    # The ToF distance sensor shows up as type 'Infrared' in the peripheral list (e.g. id 51)
+    sensors = [d for d in got.get_peripheral_devices_list() if d['type'] == 'Infrared']
+    if not sensors:
+        sys.exit("No distance sensor found - is it plugged in?")
+    return int(sensors[0]['deviceId'])
+
+
+def wall_ahead(got, sensor_id, stop_cm=STOP_CM):
+    distance = got.read_distance_data(sensor_id)
+    # -1 / 0 mean no reading yet, not "touching the wall"
+    return 0 < distance <= stop_cm
+
+
+def stop_robot(got, motors=None):
+    # Preset models stop through the chassis; custom builds ('box') stop every motor.
+    # motors=None stops all motors on the robot.
+    if got.DEVICE.getDeviceModel() in PRESET_MODELS:
+        got.stop_chassis()
+        return
+    if motors is None:
+        motors = [int(d['deviceId']) for d in got.get_peripheral_devices_list() if d['type'].lower() == 'motor']
+    got.stop_motor(motors, lock=True)
 
 # ---------------- Configuration ----------------
 BLACK_THRESHOLD = 60
@@ -325,34 +362,75 @@ def calculate_turn_rate(error):
 
 
 # ---------------- Actuation: motor commands only ----------------
+LEFT_MOTORS = [11, 31]
+RIGHT_MOTORS = [41, 61]
+LEFT_SIGN = -1
+RIGHT_SIGN = 1
+# shortcut: unmeasured guess; time turn_left(got, 2) at speed 40 and set this to degrees turned / 2.
+DEG_PER_SEC = 90  # at speed 40
+
+
+def drive(got, left_speed, right_speed):
+    for m in LEFT_MOTORS:
+        got.turn_motor_speed(m, LEFT_SIGN * left_speed)
+    for m in RIGHT_MOTORS:
+        got.turn_motor_speed(m, RIGHT_SIGN * right_speed)
+
+
+def stop(got):
+    for m in LEFT_MOTORS + RIGHT_MOTORS:
+        got.stop_motor(m)
+
+
+def forward(got, seconds, speed=40):
+    drive(got, speed, speed)
+    time.sleep(seconds)
+    stop(got)
+
+
+def turn_left(got, seconds, speed=40):
+    drive(got, -speed, speed)
+    time.sleep(seconds)
+    stop(got)
+
+
+def turn_right(got, seconds, speed=40):
+    drive(got, speed, -speed)
+    time.sleep(seconds)
+    stop(got)
+
+
 def apply_motion(turn_rate, running):
-    """Move when started; stop when paused or the tape is lost."""
+    """Turn toward the tape, then move forward using timed motor commands."""
     if not args.drive:
         return
     if not running or turn_rate is None:
-        robot.mecanum_stop()
+        stop(robot)
         return
 
-    # The firmware bounds each command by distance. Positive rotation in
-    # the SDK means left, whereas positive tape error means right.
-    rotation = 0 if abs(turn_rate) < 5 else -int(round(turn_rate))
-    response = robot.MODEL.mecanum_move_control(
-        linear_speed=FORWARD_SPEED, direction=0,
-        rotate_speed=rotation, mileage=args.step_cm,
-    )
-    if response.code != 0:
-        raise RuntimeError(f"Movement rejected: {response}")
+    # Retain the existing step-duration estimate; actual distance needs calibration.
+    forward_seconds = args.step_cm / FORWARD_SPEED
+    turn_seconds = abs(turn_rate) * forward_seconds / DEG_PER_SEC
+
+    try:
+        # Negative tape error means left; positive tape error means right.
+        if turn_rate <= -5:
+            turn_left(robot, turn_seconds)
+        elif turn_rate >= 5:
+            turn_right(robot, turn_seconds)
+        forward(robot, forward_seconds)
+        
+    finally:
+        stop(robot)
 
 
 def wait_phase(seconds):
-    """Keep Space/Q responsive during a move or stopped settling period."""
+    """Keep Q responsive during the waiting period."""
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         key = cv2.waitKey(20) & 0xFF
         if key == ord("q"):
             raise KeyboardInterrupt
-        if key == ord(" "):
-            return False
     return True
 
 
@@ -363,12 +441,9 @@ def move_step(turn_rate):
         apply_motion(turn_rate, True)
         # No camera reads while moving. Allow a small completion margin;
         # the firmware stops at mileage, and we explicitly stop afterwards.
-        completed = wait_phase(args.step_cm / FORWARD_SPEED + 0.5)
+        wait_phase(args.step_cm / FORWARD_SPEED + 0.5)
     finally:
         apply_motion(None, False)
-    if not completed:
-        print("Motion paused.")
-        return False
     print("Stopped: settling before next photo.")
     return wait_phase(args.pause_seconds)
 
@@ -382,11 +457,11 @@ def follow_tape(transform):
         BLACK_THRESHOLD, 255, lambda _: None,
     )
 
-    running = False
+    running = args.drive
     apply_motion(None, False)
 
-    print("Space = start/pause motion | Q = stop and quit")
-    print("Tune threshold before starting.")
+    print("Motion starts automatically after calibration when tape is detected.")
+    print("Q = stop and quit")
     print(f"Photo -> move {args.step_cm} cm -> stop {args.pause_seconds:g}s -> repeat")
     if not args.drive:
         print("Preview only. Use --drive to enable movement.")
@@ -416,14 +491,14 @@ def follow_tape(transform):
             # Controller: convert error into a turning command.
             turn_rate = calculate_turn_rate(error)
 
+            running = args.drive and turn_rate is not None
             if error is None:
-                running = False
                 apply_motion(None, False)
 
             if error is None:
                 status = "TAPE LOST - stopped"
             else:
-                mode = "STEP READY" if running else "PAUSED"
+                mode = "STEP READY" if running else "PREVIEW"
                 status = (
                     f"{mode} | error {error:+.2f} | "
                     f"turn {turn_rate:+.1f} deg/s"
@@ -431,7 +506,7 @@ def follow_tape(transform):
 
             preview = frame.copy()
             label(preview, status)
-            label(view, "Space start/pause | Q stop and quit")
+            label(view, "Q stop and quit")
 
             cv2.imshow("Camera", preview)
             cv2.imshow("Path detection", view)
@@ -442,22 +517,10 @@ def follow_tape(transform):
             if key == ord("q"):
                 break
 
-            if key == ord(" "):
-                if running:
-                    running = False
-                    print("Motion paused.")
-                elif not args.drive:
-                    print("Cannot start: use --drive to enable movement.")
-                elif error is not None:
-                    running = True
-                    print("Motion started.")
-                else:
-                    print("Cannot start: tape not detected.")
-
             if running:
                 # The next iteration captures a fresh photo only after
                 # this movement has stopped and the camera has settled.
-                label(preview, f"STEP {args.step_cm} cm | Space pause | Q quit")
+                label(preview, f"STEP {args.step_cm} cm | Q quit")
                 cv2.imshow("Camera", preview)
                 running = move_step(turn_rate)
 

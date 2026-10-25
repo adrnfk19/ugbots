@@ -10,7 +10,7 @@ Your laptop must be on the same Wi-Fi as the robot. Find the robot's IP on its c
 python3 -m venv .venv          # Ubuntu/WSL may need: sudo apt install python3-venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python main.py 10.10.153.123   # or no IP to scan the LAN
+python main.py sound-turn --ip 10.10.53.123   # --ip is required; see --help for tasks
 ```
 
 ### Windows (PowerShell)
@@ -19,7 +19,7 @@ Install Python 3.12 from python.org (tick "Add python.exe to PATH"), then:
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-python main.py 10.10.153.123   # or no IP to scan the LAN
+python main.py sound-turn --ip 10.10.53.123   # --ip is required; see --help for tasks
 ```
 If activation is blocked, run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 In cmd.exe use `.venv\Scripts\activate.bat` instead.
