@@ -33,8 +33,8 @@ def run(got, speed=40, min_angle=15, cooldown=1.0):
                 direction, degrees = turn_for(res.angle)
                 print(f"Sound at {res.angle} deg -> turn {'left' if direction == TURN_LEFT else 'right'} {degrees}")
                 if degrees >= min_angle:
-                    turned = motion.turn_degrees(got, degrees, direction == TURN_LEFT, speed)
-                    print(f"Turned {round(turned)} deg")
+                    seconds = degrees / (motion.DEG_PER_SEC * speed / 40)
+                    (motion.turn_left if direction == TURN_LEFT else motion.turn_right)(got, seconds, speed)
                 report(got)
                 time.sleep(cooldown)  # so motor/TTS noise isn't heard as a new sound
             time.sleep(0.1)
