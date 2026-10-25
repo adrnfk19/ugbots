@@ -3,14 +3,28 @@
 UGOT robot code using the Python SDK (`ugot` on PyPI).
 
 ## Setup
+Your laptop must be on the same Wi-Fi as the robot. Find the robot's IP on its controller under Settings → About.
+
+### macOS / Linux / WSL
 ```bash
-uv venv .venv && uv pip install --python .venv -r requirements.txt
-# or: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt  (needs python3-venv)
+python3 -m venv .venv          # Ubuntu/WSL may need: sudo apt install python3-venv
 source .venv/bin/activate
-python main.py            # scans LAN for the robot
-python main.py 10.10.153.123  # or connect by IP (shown in the robot's settings)
+pip install -r requirements.txt
+python main.py 10.10.153.123   # or no IP to scan the LAN
 ```
-Your laptop must be on the same Wi-Fi as the robot.
+
+### Windows (PowerShell)
+Install Python 3.12 from python.org (tick "Add python.exe to PATH"), then:
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python main.py 10.10.153.123   # or no IP to scan the LAN
+```
+If activation is blocked, run once: `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+In cmd.exe use `.venv\Scripts\activate.bat` instead.
+
+Tip: with [uv](https://docs.astral.sh/uv/) installed, `uv venv` + `uv pip install -r requirements.txt` works on every OS.
 
 ## Workflow
 - `main` stays runnable on the robot. Branch per feature: `git switch -c feat/line-follow`.
