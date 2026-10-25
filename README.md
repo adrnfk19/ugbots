@@ -8,7 +8,7 @@ uv venv .venv && uv pip install --python .venv -r requirements.txt
 # or: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt  (needs python3-venv)
 source .venv/bin/activate
 python main.py            # scans LAN for the robot
-python main.py 192.168.x.x  # or connect by IP (shown in the robot's settings)
+python main.py 10.10.153.123  # or connect by IP (shown in the robot's settings)
 ```
 Your laptop must be on the same Wi-Fi as the robot.
 
