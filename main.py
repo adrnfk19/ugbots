@@ -12,4 +12,4 @@ if ip is None:
     ip = next(iter(devices.values()))
 
 got.initialize(ip)
-got.play_audio_tts("connected", 0, True)
+got.play_audio_tts("Team Jellyfish", 0, True)

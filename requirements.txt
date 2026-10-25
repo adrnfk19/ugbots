@@ -1,1 +1,1 @@
-ugot==0.2.13
+ugot==0.2.9  # 0.2.11+ calls getLanguage, which this robot's firmware doesn't support
