@@ -9,8 +9,18 @@ def turn_for(angle):
     return (TURN_LEFT if delta > 0 else TURN_RIGHT), abs(delta)
 
 
+def report(got):
+    """Say and print battery % and tilt (pitch/roll from the IMU)."""
+    power = got.get_power_status()  # [percent, plugged, status] or None
+    pitch, roll = got.read_gyro_data()[:2]
+    battery = f"battery {power[0]} percent" if power else "battery unknown"
+    msg = f"{battery}, pitch {round(pitch)} degrees, roll {round(roll)} degrees"
+    print(msg)
+    got.play_audio_tts(msg, 0, True)
+
+
 def run(got, chassis="mecanum", speed=90, min_angle=15, cooldown=1.0):
-    """Turn to face any voice or clap, forever. Ctrl+C to stop."""
+    """Turn to face any voice or clap, then report battery and tilt, forever. Ctrl+C to stop."""
     turn = getattr(got, f"{chassis}_turn_speed_times")
     got.enable_audio_direction()
     print("Listening - clap or talk...")
@@ -24,7 +34,8 @@ def run(got, chassis="mecanum", speed=90, min_angle=15, cooldown=1.0):
                 if degrees >= min_angle:
                     turn(direction, speed, degrees, DEGREES)
                     time.sleep(degrees / speed)  # let the turn finish
-                time.sleep(cooldown)  # so motor noise isn't heard as a new sound
+                report(got)
+                time.sleep(cooldown)  # so motor/TTS noise isn't heard as a new sound
             time.sleep(0.1)
     finally:
         getattr(got, f"{chassis}_stop")()
